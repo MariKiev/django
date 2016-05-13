@@ -14,20 +14,17 @@ except ImportError:
 ROOT = os.path.dirname(forms.__file__)
 
 
-class TemplateRenderer(object):
+class StandaloneTemplateRenderer(object):
+    """A renderer that can only find the built-in default form templates."""
     def get_template(self, template_name):
-        try:
-            return get_template(template_name)
-        except TemplateDoesNotExist:
-            # TODO: Add RemovedInDjango20Warning indicating this fallback will be removed.
-            return self.default_engine.get_template(template_name)
+        return self.standalone_engine.get_template(template_name)
 
     def render(self, template_name, context, request=None):
         template = self.get_template(template_name)
         return template.render(context, request=request).strip()
 
     @cached_property
-    def default_engine(self):
+    def standalone_engine(self):
         if jinja2:
             from django.template.backends.jinja2 import Jinja2
             return Jinja2({
@@ -42,3 +39,16 @@ class TemplateRenderer(object):
             'NAME': 'djangoforms',
             'OPTIONS': {},
         })
+
+
+class TemplateRenderer(StandaloneTemplateRenderer):
+    """Render first via TEMPLATES, then fall back to built-in templates."""
+    def get_template(self, template_name):
+        try:
+            return get_template(template_name)
+        except TemplateDoesNotExist as e:
+            try:
+                return super(TemplateRenderer, self).get_template(template_name)
+            except TemplateDoesNotExist as e2:
+                e.chain.append(e2)
+            raise

@@ -25,59 +25,39 @@ Widget templates are stored in the ``django/forms/widgets`` path. A project
 can provide a custom template for ``input.html`` by defining
 ``django/forms/widgets/input.html``, for example.
 
-.. note::
-
-    While form rendering should work out of the box, overriding templates
-    in your project requires some configuration.
+The rendering of form templates is controlled by a customizable renderer
+class. A custom renderer can be specified by updating the
+:setting:`FORM_RENDERER` setting. It defaults to
+``'django.forms.renderers.templates.TemplateRenderer'``.
 
 .. module:: django.forms.renderers.templates
 
 .. class:: TemplateRenderer
 
-.. attribute:: loader
+.. method:: get_template(template_name)
 
-    A property that returns a template loading method. This method receives
-    the widget template name.
+    Given a template name, returns a :class:`~django.template.Template` object,
+    or raises :exc:`~django.template.TemplateDoesNotExist`. First attempts to
+    load the template via :class:`~django.template.loader.get_template`, which
+    uses the template engines configured in :setting:`TEMPLATES`. If the
+    template is not found by those engines, falls back to the built-in form
+    templates shipped with Django (using Jinja2 if installed, the Django
+    template language otherwise).
 
 .. method:: render(template_name, context, request=None)
 
-    Renders the ``template_name`` and ``context`` using the configured
-    template engine.
+    Renders the ``template_name`` and ``context``. Calls :meth:`.get_template`
+    to load the given ``template_name``.
 
-How rendering is configured
+If you want to use a custom template engine specifically for form rendering,
+you could create your own custom renderer subclass like::
 
-1. At the first ``render`` call, ``TemplateRenderer`` looks at the configured
-   project settings. It checks for the following requirements:
-
-   * ``django.forms`` is added to ``INSTALLED_APPS``
-
-   And one of:
-
-   * An engine with ``APP_DIRS=True`` is configured or
-   * A ``DjangoTemplates`` engine using the ``app_directories.Loader`` is
-     configured.
-
-   If these are satisfied, the template is loaded using the
-   ``django.template.loader`` API. Consequently, you can directly override
-   templates in your project.
-
-   Note: Since ``django.forms`` is in ``INSTALLED_APPS``, the order it appears
-   relative to other applications is important. Applications farther in the
-   list have less priority than applications near the front.
-
-   If the above requirements are not met, a default engine is configured. This
-   uses ``Jinja2`` to be as fast as possible.
-
-Alternatively, a custom renderer can be specified by updating the
-:setting:`FORM_RENDERER` setting. It defaults to
-``'django.forms.renderers.templates.TemplateRenderer'``.
-
-If you want to use a custom engine, you could create a custom subclass like::
-
+    from django.forms.renderers.templates import TemplateRenderer
     from django.utils.functional import cached_property
 
-    class MyRenderer(object):
-        engine_name = None
+    class MyRenderer(TemplateRenderer):
+        def get_template(self, template_name):
+            return self.engine.get_template(template_name)
 
         @cached_property
         def engine(self):
@@ -87,6 +67,14 @@ If you want to use a custom engine, you could create a custom subclass like::
                 'NAME': 'djangoforms',
                 'OPTIONS': {},
             })
+
+Django ships with one alternative renderer class, a simple one that uses only
+the built-in default form templates and does not consult the template engines
+configured via :setting:`TEMPLATES`. This may be useful for standalone usage of
+Django's forms library, or just for simplicity if you don't ever need to
+override or add to the default form templates. To use this renderer, set
+:setting:`FORM_RENDERER` to
+``'django.forms.renderers.templates.StandaloneTemplateRenderer'``.
 
 Customizing widget rendering
 ----------------------------
